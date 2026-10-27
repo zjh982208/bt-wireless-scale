@@ -23,6 +23,11 @@ workflows:
       - name: Setup iOS code signing
         script: |
           keychain initialize
+          # Flutter 导出 IPA 前会检查 Apple Development 证书，先创建并装入钥匙串。
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_DEVELOPMENT --create
+          keychain add-certificates
+          # 清掉开发描述文件，避免导出时误用 development。
+          rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/"*.mobileprovision
           app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
           keychain add-certificates
           xcode-project use-profiles
