@@ -23,19 +23,17 @@ workflows:
       - name: Setup iOS code signing
         script: |
           keychain initialize
-          # Flutter 导出 IPA 前会检查 Apple Development 证书，先创建并装入钥匙串。
-          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_DEVELOPMENT --create
-          keychain add-certificates
-          # 清掉开发描述文件，避免导出时误用 development。
-          rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/"*.mobileprovision
           app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
           keychain add-certificates
-          xcode-project use-profiles
 
       - name: Build IPA
         script: |
-          flutter build ipa --release \
-            --export-options-plist=/Users/builder/export_options.plist
+          # flutter build ipa 只认 Development 证书，会忽略 Apple Distribution。
+          # 先生成 Flutter 配置，再用 Xcode 按 App Store 证书归档。
+          flutter build ios --config-only --release
+          xcode-project use-profiles
+          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release -destination "generic/platform=iOS" -archivePath "$CM_BUILD_DIR/build/Runner.xcarchive" archive COMPILER_INDEX_STORE_ENABLE=NO
+          xcodebuild -exportArchive -archivePath "$CM_BUILD_DIR/build/Runner.xcarchive" -exportPath "$CM_BUILD_DIR/build/ios/ipa" -exportOptionsPlist "/Users/builder/export_options.plist"
 
     artifacts:
       - build/ios/ipa/*.ipa
