@@ -10,6 +10,7 @@ workflows:
       cocoapods: default
       groups:
         - app_store_credentials
+        - ios_distribution_key
       vars:
         BUNDLE_ID: "com.sounding.blescale"
         APP_STORE_APPLE_ID: "0000000000"
@@ -57,10 +58,17 @@ workflows:
               for item in errors:
                   print("- " + item)
               sys.exit(1)
+          with open("/tmp/ios_distribution_private_key", "w", encoding="utf-8") as key_file:
+              key_file.write(cert_key.strip() + "\n")
           print("Credential format check passed")
           PY
+          unset CERTIFICATE_PRIVATE_KEY
           keychain initialize
-          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create \
+            --issuer-id "@env:APP_STORE_CONNECT_ISSUER_ID" \
+            --key-id "@env:APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --private-key "@env:APP_STORE_CONNECT_PRIVATE_KEY" \
+            --certificate-key "@file:/tmp/ios_distribution_private_key"
           keychain add-certificates
 
       - name: Build IPA
