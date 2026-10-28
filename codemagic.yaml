@@ -22,6 +22,43 @@ workflows:
 
       - name: Setup iOS code signing
         script: |
+          python3 << 'PY'
+          import os, re, sys
+          issuer = os.environ.get("APP_STORE_CONNECT_ISSUER_ID", "").strip()
+          key_id = os.environ.get("APP_STORE_CONNECT_KEY_IDENTIFIER", "").strip()
+          api_key = os.environ.get("APP_STORE_CONNECT_PRIVATE_KEY", "").replace("\r\n", "\n").replace("\r", "\n")
+          cert_key = os.environ.get("CERTIFICATE_PRIVATE_KEY", "").replace("\r\n", "\n").replace("\r", "\n")
+
+          def header(text):
+              lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
+              return lines[0] if lines else ""
+
+          api_header = header(api_key)
+          cert_header = header(cert_key)
+          print("ISSUER_ID length=%s" % len(issuer))
+          print("KEY_ID length=%s" % len(key_id))
+          print("APP_STORE_CONNECT_PRIVATE_KEY header=%s length=%s" % (api_header or "<empty>", len(api_key.strip())))
+          print("CERTIFICATE_PRIVATE_KEY header=%s length=%s" % (cert_header or "<empty>", len(cert_key.strip())))
+          errors = []
+          if not re.fullmatch(r"[0-9a-fA-F-]{36}", issuer):
+              errors.append("APP_STORE_CONNECT_ISSUER_ID must be the Issuer ID UUID from App Store Connect > Users and Access > Integrations.")
+          if not re.fullmatch(r"[A-Za-z0-9]{10}", key_id):
+              errors.append("APP_STORE_CONNECT_KEY_IDENTIFIER must be the 10-character Key ID. It is the suffix of AuthKey_XXXXXXXXXX.p8.")
+          if api_header == "-----BEGIN RSA PRIVATE KEY-----":
+              errors.append("APP_STORE_CONNECT_PRIVATE_KEY is the desktop certificate key. Paste the .p8 file, which starts with -----BEGIN PRIVATE KEY-----.")
+          elif api_header != "-----BEGIN PRIVATE KEY-----":
+              errors.append("APP_STORE_CONNECT_PRIVATE_KEY must start with -----BEGIN PRIVATE KEY-----.")
+          if cert_header != "-----BEGIN RSA PRIVATE KEY-----":
+              errors.append("CERTIFICATE_PRIVATE_KEY must be the desktop file and start with -----BEGIN RSA PRIVATE KEY-----.")
+          if api_key.strip() and api_key.strip() == cert_key.strip():
+              errors.append("The two private keys are the same file. Use the .p8 for the API key and the desktop file for CERTIFICATE_PRIVATE_KEY.")
+          if errors:
+              print("Credential check failed:")
+              for item in errors:
+                  print("- " + item)
+              sys.exit(1)
+          print("Credential format check passed")
+          PY
           keychain initialize
           app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
           keychain add-certificates
