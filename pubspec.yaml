@@ -1,7 +1,7 @@
 name: sd_wireless_scale
 description: SD wireless scale app with KT6368A
 publish_to: "none"
-version: 1.0.1+1002
+version: 1.0.1+1003
 
 environment:
   sdk: ">=3.3.0 <4.0.0"

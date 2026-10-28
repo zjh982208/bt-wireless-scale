@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -152,6 +153,11 @@ class ScaleController extends ChangeNotifier {
     }
 
     Future<bool> ensurePermissions() async {
+        if (Platform.isIOS) {
+            // iOS 只弹出蓝牙授权。bluetoothScan、bluetoothConnect、定位会直接被拒绝，系统框不会出现。
+            final status = await Permission.bluetooth.request();
+            return status.isGranted || status.isLimited;
+        }
         final req = <Permission>[
             Permission.bluetoothScan,
             Permission.bluetoothConnect,
@@ -179,7 +185,9 @@ class ScaleController extends ChangeNotifier {
     Future<List<BleDeviceItem>> scanDevices() async {
         final ok = await ensurePermissions();
         if (!ok) {
-            statusText = tr('\u8bf7\u6388\u6743\u84dd\u7259\u4e0e\u5b9a\u4f4d\u6743\u9650', 'Please grant Bluetooth and location permissions');
+            statusText = Platform.isIOS
+                ? tr('\u8bf7\u6388\u6743\u84dd\u7259\u6743\u9650', 'Please grant Bluetooth permission')
+                : tr('\u8bf7\u6388\u6743\u84dd\u7259\u4e0e\u5b9a\u4f4d\u6743\u9650', 'Please grant Bluetooth and location permissions');
             notifyListeners();
             return [];
         }
