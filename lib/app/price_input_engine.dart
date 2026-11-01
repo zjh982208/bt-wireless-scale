@@ -45,8 +45,11 @@ class PriceInputEngine {
       return false;
     }
     _checkTimeout();
-    // 已有5位或大于99999时，本次按键清掉原单价，新数字从个位开始。
-    if (_overLimit()) {
+    // 小数后两位已满时，本次数字清掉原单价，从个位重新开始。
+    if (_dotPressed && _fracCount >= 2) {
+      _restartForNewInput();
+    } else if (_overLimit()) {
+      // 已有5位或大于99999时，本次按键清掉原单价，新数字从个位开始。
       _restartForNewInput();
     }
     if (_dotPressed) {
@@ -54,7 +57,7 @@ class PriceInputEngine {
       final remainDigits = maxPriceDigits - intDigits;
       final maxFrac = remainDigits <= 0 ? 0 : (remainDigits >= 2 ? 2 : 1);
       if (_fracCount >= maxFrac) {
-        _lastInputAt = DateTime.now(); // 小数位已满但未超过5位，保持当前单价并继续响应。 //
+        _lastInputAt = DateTime.now(); // 小数位已满但不足两位，保持当前单价并继续响应。 //
         return true;
       } else {
         _rawDigits += digit;
@@ -131,12 +134,20 @@ class PriceInputEngine {
       intPart = digits;
       fracPart = '';
     }
-    if (!dotPressed) {
+    var fracWidth = 5 - intPart.length; // 单价窗共5位，小数最多2位 //
+    if (fracWidth > 2) {
+      fracWidth = 2;
+    }
+    if (fracWidth < 0) {
+      fracWidth = 0;
+    }
+    if (fracWidth == 0) {
       return intPart;
     }
-    if (fracPart.isEmpty) {
-      return '$intPart.';
+    var frac = fracPart;
+    if (frac.length > fracWidth) {
+      frac = frac.substring(0, fracWidth);
     }
-    return '$intPart.$fracPart';
+    return '$intPart.${frac.padRight(fracWidth, '0')}'; // 1显示1.00，4显示4.00 //
   }
 }
