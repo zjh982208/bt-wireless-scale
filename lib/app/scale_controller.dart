@@ -339,8 +339,8 @@ class ScaleController extends ChangeNotifier {
         } else {
             priceText = priceEngine.displayText;
         }
-        totalText = _normalizeNumberText(frame.totalText, maxDigits: 6, maxFracDigits: 2);
-        totalAmountText = _normalizeNumberText(frame.totalAmountText, maxDigits: 6, maxFracDigits: 2);
+        totalText = ScaleProtocol.displayAmount7(frame.totalText);
+        totalAmountText = ScaleProtocol.displayAmount7(frame.totalAmountText);
         timesText = frame.timesText.trim().replaceFirst(RegExp(r'^0+(?=.)'), '');
         if (timesText.isEmpty) {
             timesText = '0';
@@ -376,12 +376,8 @@ class ScaleController extends ChangeNotifier {
             }
             final entryWeight = _normalizeNumberText(frame.displayWeight, maxDigits: 5, maxFracDigits: 3);
             final entryPrice = _normalizeNumberText(frame.priceText, maxDigits: 5, maxFracDigits: 2);
-            String entryAmount = _normalizeNumberText(frame.totalText, maxDigits: 6, maxFracDigits: 2);
-            final deltaAmount = totalAmountValue - _lastTotalAmountValue;
-            if (deltaAmount > 0.0) {
-                final avg = deltaAmount / addCount;
-                entryAmount = _normalizeNumberText(avg.toStringAsFixed(2), maxDigits: 6, maxFracDigits: 2);
-            }
+            // 本笔金额用秤上报的总价，不再用累计差额自己计算。
+            final entryAmount = ScaleProtocol.displayAmount7(frame.totalText);
             for (var i = 0; i < addCount; i++) {
                 _cumulativeRecords.add(
                     CumulativeRecord(

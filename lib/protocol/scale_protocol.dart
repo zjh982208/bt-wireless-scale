@@ -64,6 +64,36 @@ class ScaleProtocol {
     return text.padLeft(width, pad);
   }
 
+  /// 7-byte amount from the scale. 4 integer digits keep 2 decimals,
+  /// 5 digits keep 1, 6 digits keep the trailing dot only.
+  /// Examples: 0012.34 -> 12.34, 12345.6 -> 12345.6, 123456. -> 123456.
+  static String displayAmount7(String raw) {
+    final src = raw.trim();
+    if (src.isEmpty) {
+      return '0';
+    }
+    final cleaned = src.replaceAll(RegExp(r'[^0-9.]'), '');
+    if (cleaned.isEmpty) {
+      return '0';
+    }
+    final dot = cleaned.indexOf('.');
+    var intPart = dot >= 0 ? cleaned.substring(0, dot) : cleaned;
+    var fracPart = dot >= 0 ? cleaned.substring(dot + 1) : '';
+    intPart = intPart.replaceFirst(RegExp(r'^0+(?=.)'), '');
+    if (intPart.isEmpty) {
+      intPart = '0';
+    }
+    if (intPart.length >= 6) {
+      return intPart.substring(0, 6);
+    }
+    if (intPart.length == 5) {
+      final frac = fracPart.isEmpty ? '0' : fracPart[0];
+      return '$intPart.$frac';
+    }
+    final fp = fracPart.padRight(2, '0');
+    return '$intPart.${fp.substring(0, 2)}';
+  }
+
   /// Format price to 6 ASCII chars with at most 5 digits.
   /// Examples: 1.23 -> 001.23, 1234.5 -> 1234.5, 12345 -> 12345.
   static String formatPrice6(num price) {
