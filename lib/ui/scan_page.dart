@@ -15,18 +15,40 @@ class ScanPage extends StatefulWidget {
 class _ScanPageState extends State<ScanPage> {
   List<BleDeviceItem> _devices = [];
   var _loading = true;
-  String? _error;
 
   @override
   void initState() {
     super.initState();
+    widget.controller.addListener(_onController); // 语言或状态变化时刷新本页
     _startScan();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onController);
+    super.dispose();
+  }
+
+  void _onController() {
+    if (mounted) {
+      setState(() {}); // 切换语言后重绘设备名和状态
+    }
+  }
+
+  String _deviceTitle(BleDeviceItem item) {
+    if (!item.markConnected) {
+      return item.name;
+    }
+    final isChinese = widget.controller.isChinese;
+    if (item.name.isEmpty) {
+      return isChinese ? '\u5df2\u8fde\u63a5\u8bbe\u5907' : 'Connected device';
+    }
+    return isChinese ? '${item.name} (\u5df2\u8fde\u63a5)' : '${item.name} (connected)';
   }
 
   Future<void> _startScan() async {
     setState(() {
       _loading = true;
-      _error = null;
     });
     final list = await widget.controller.scanDevices();
     if (!mounted) {
@@ -35,9 +57,6 @@ class _ScanPageState extends State<ScanPage> {
     setState(() {
       _devices = list;
       _loading = false;
-      if (list.isEmpty) {
-        _error = widget.controller.statusText;
-      }
     });
   }
 
@@ -68,7 +87,9 @@ class _ScanPageState extends State<ScanPage> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          _error ?? (isChinese ? '\u672a\u53d1\u73b0\u8bbe\u5907' : 'No device found'),
+                          widget.controller.statusText.isEmpty
+                              ? (isChinese ? '\u672a\u53d1\u73b0\u8bbe\u5907' : 'No device found')
+                              : widget.controller.statusText, // 状态随当前语言变化
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 16),
@@ -87,7 +108,7 @@ class _ScanPageState extends State<ScanPage> {
                     final d = _devices[index];
                     return ListTile(
                       leading: const Icon(Icons.bluetooth, color: Color(0xFF1A73E8)),
-                      title: Text(d.name),
+                      title: Text(_deviceTitle(d)),
                       subtitle: Text('${d.id}  RSSI ${d.rssi}'),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => _connect(d),

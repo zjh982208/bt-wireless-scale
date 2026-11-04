@@ -11,10 +11,34 @@ import '../ble/kt6368_uart.dart';
 import '../protocol/scale_protocol.dart';
 import 'price_input_engine.dart';
 
+
 enum AppWorkMode { display, operate }
 enum AppLanguage { zh, en }
 
 enum ConnState { idle, scanning, connecting, connected, reconnecting }
+
+enum _ScaleStatus {
+    notConnected, // 未连接
+    selectDevice, // 请选择设备
+    preparingReconnect, // 准备自动重连
+    grantBluetooth, // 请授权蓝牙
+    grantBluetoothLocation, // 请授权蓝牙和定位
+    bluetoothOff, // 蓝牙未打开
+    scanning, // 正在扫描
+    foundDevices, // 扫描到设备
+    scanFailed, // 扫描失败
+    connected, // 已连接
+    connecting, // 连接中
+    connectFailed, // 连接失败
+    bluetoothOffWait, // 蓝牙关闭后等待重连
+    autoReconnecting, // 自动重连中
+    reconnectFailed, // 重连失败
+    disconnected, // 已断开
+    connectionLost, // 连接断开后重连
+    disconnectedManually, // 已手动断开
+    scaleNotConnected, // 未连接蓝牙秤
+    sendFailed, // 发送失败
+}
 
 class CumulativeRecord {
     CumulativeRecord({
@@ -39,7 +63,8 @@ class ScaleController extends ChangeNotifier {
 
     AppWorkMode workMode = AppWorkMode.operate;
     ConnState connState = ConnState.idle;
-    String statusText = '\u672a\u8fde\u63a5';
+    _ScaleStatus _status = _ScaleStatus.notConnected; // 当前状态，切换语言后按这个重新取文案
+    String _statusDetail = ''; // 状态中的设备名、数量或错误信息
     String deviceName = '';
     String deviceId = '';
 
@@ -73,6 +98,62 @@ class ScaleController extends ChangeNotifier {
         return isChinese ? zh : en;
     }
 
+    String get statusText => _statusMessage(); // 按当前语言生成状态文字
+
+    void _setStatus(_ScaleStatus status, [String detail = '']) {
+        _status = status; // 只记下状态，不提前翻译
+        _statusDetail = detail;
+    }
+
+    String _statusMessage() {
+        final detail = _statusDetail;
+        switch (_status) {
+            case _ScaleStatus.notConnected:
+                return tr('\u672a\u8fde\u63a5', 'Not connected');
+            case _ScaleStatus.selectDevice:
+                return tr('\u8bf7\u5728\u5217\u8868\u4e2d\u9009\u62e9\u84dd\u7259\u8bbe\u5907', 'Please select a Bluetooth scale');
+            case _ScaleStatus.preparingReconnect:
+                return tr('\u51c6\u5907\u81ea\u52a8\u8fde\u63a5 $detail', 'Preparing auto reconnect $detail');
+            case _ScaleStatus.grantBluetooth:
+                return tr('\u8bf7\u6388\u6743\u84dd\u7259\u6743\u9650', 'Please grant Bluetooth permission');
+            case _ScaleStatus.grantBluetoothLocation:
+                return tr('\u8bf7\u6388\u6743\u84dd\u7259\u4e0e\u5b9a\u4f4d\u6743\u9650', 'Please grant Bluetooth and location permissions');
+            case _ScaleStatus.bluetoothOff:
+                return tr(
+                    '\u8bf7\u5148\u6253\u5f00\u624b\u673a\u84dd\u7259\uff08\u5f53\u524d\u72b6\u6001: $detail\uff09',
+                    'Please turn on Bluetooth (current state: $detail)',
+                );
+            case _ScaleStatus.scanning:
+                return tr('\u6b63\u5728\u626b\u63cf...', 'Scanning...');
+            case _ScaleStatus.foundDevices:
+                return tr('\u626b\u63cf\u5230 $detail \u4e2a\u8bbe\u5907', 'Found $detail devices');
+            case _ScaleStatus.scanFailed:
+                return tr('\u626b\u63cf\u5931\u8d25: $detail', 'Scan failed: $detail');
+            case _ScaleStatus.connected:
+                return tr('\u5df2\u8fde\u63a5 $detail', 'Connected $detail');
+            case _ScaleStatus.connecting:
+                return tr('\u8fde\u63a5\u4e2d $detail...', 'Connecting $detail...');
+            case _ScaleStatus.connectFailed:
+                return tr('\u8fde\u63a5\u5931\u8d25: $detail', 'Connect failed: $detail');
+            case _ScaleStatus.bluetoothOffWait:
+                return tr('\u84dd\u7259\u672a\u5f00\u542f\uff0c\u7b49\u5f85\u91cd\u8fde', 'Bluetooth is off, waiting to reconnect');
+            case _ScaleStatus.autoReconnecting:
+                return tr('\u81ea\u52a8\u91cd\u8fde $detail...', 'Auto reconnecting $detail...');
+            case _ScaleStatus.reconnectFailed:
+                return tr('\u91cd\u8fde\u5931\u8d25\uff0c\u7a0d\u540e\u91cd\u8bd5', 'Reconnect failed, retry later');
+            case _ScaleStatus.disconnected:
+                return tr('\u5df2\u65ad\u5f00', 'Disconnected');
+            case _ScaleStatus.connectionLost:
+                return tr('\u8fde\u63a5\u65ad\u5f00\uff0c\u81ea\u52a8\u91cd\u8fde\u4e2d...', 'Connection lost, reconnecting...');
+            case _ScaleStatus.disconnectedManually:
+                return tr('\u5df2\u624b\u52a8\u65ad\u5f00', 'Disconnected manually');
+            case _ScaleStatus.scaleNotConnected:
+                return tr('\u672a\u8fde\u63a5\u84dd\u7259\u79e4', 'Scale is not connected');
+            case _ScaleStatus.sendFailed:
+                return tr('\u53d1\u9001\u5931\u8d25: $detail', 'Send failed: $detail');
+        }
+    }
+
     bool get canOpenScan {
         if (connState == ConnState.scanning) {
             return false;
@@ -88,7 +169,7 @@ class ScaleController extends ChangeNotifier {
             await ble.disconnect(); // 已连接时先断开，避免旧设备持续占用 //
         }
         connState = ConnState.idle;
-        statusText = tr('\u8bf7\u5728\u5217\u8868\u4e2d\u9009\u62e9\u84dd\u7259\u8bbe\u5907', 'Please select a Bluetooth scale');
+        _setStatus(_ScaleStatus.selectDevice);
         notifyListeners();
     }
 
@@ -119,7 +200,7 @@ class ScaleController extends ChangeNotifier {
         ble.onBytes = _onBleBytes;
 
         if (deviceId.isNotEmpty) {
-            statusText = tr('\u51c6\u5907\u81ea\u52a8\u8fde\u63a5 $deviceName', 'Preparing auto reconnect $deviceName');
+            _setStatus(_ScaleStatus.preparingReconnect, deviceName);
             notifyListeners();
             unawaited(reconnectSaved());
         }
@@ -185,25 +266,20 @@ class ScaleController extends ChangeNotifier {
     Future<List<BleDeviceItem>> scanDevices() async {
         final ok = await ensurePermissions();
         if (!ok) {
-            statusText = Platform.isIOS
-                ? tr('\u8bf7\u6388\u6743\u84dd\u7259\u6743\u9650', 'Please grant Bluetooth permission')
-                : tr('\u8bf7\u6388\u6743\u84dd\u7259\u4e0e\u5b9a\u4f4d\u6743\u9650', 'Please grant Bluetooth and location permissions');
+            _setStatus(Platform.isIOS ? _ScaleStatus.grantBluetooth : _ScaleStatus.grantBluetoothLocation);
             notifyListeners();
             return [];
         }
 
         final adapterState = await _readAdapterState();
         if (adapterState != BluetoothAdapterState.on) {
-            statusText = tr(
-                '\u8bf7\u5148\u6253\u5f00\u624b\u673a\u84dd\u7259\uff08\u5f53\u524d\u72b6\u6001: $adapterState\uff09',
-                'Please turn on Bluetooth (current state: $adapterState)',
-            );
+            _setStatus(_ScaleStatus.bluetoothOff, adapterState.name);
             notifyListeners();
             return [];
         }
 
         connState = ConnState.scanning;
-        statusText = tr('\u6b63\u5728\u626b\u63cf...', 'Scanning...');
+        _setStatus(_ScaleStatus.scanning);
         notifyListeners();
         try {
             final list = await Kt6368Uart.scan(timeout: const Duration(seconds: 10));
@@ -215,22 +291,21 @@ class ScaleController extends ChangeNotifier {
                         0,
                         BleDeviceItem(
                             device: connectedDevice,
-                            name: deviceName.isEmpty
-                                ? '\u5df2\u8fde\u63a5\u8bbe\u5907'
-                                : '$deviceName (\u5df2\u8fde\u63a5)',
+                            name: deviceName, // 界面按当前语言加上已连接
                             rssi: 127,
+                            markConnected: true,
                         ),
                     );
                 }
             }
 
             connState = ble.isConnected ? ConnState.connected : ConnState.idle;
-            statusText = tr('\u626b\u63cf\u5230 ${list.length} \u4e2a\u8bbe\u5907', 'Found ${list.length} devices');
+            _setStatus(_ScaleStatus.foundDevices, '${list.length}');
             notifyListeners();
             return list;
         } catch (e) {
             connState = ConnState.idle;
-            statusText = tr('\u626b\u63cf\u5931\u8d25: $e', 'Scan failed: $e');
+            _setStatus(_ScaleStatus.scanFailed, '$e');
             notifyListeners();
             return [];
         }
@@ -239,7 +314,7 @@ class ScaleController extends ChangeNotifier {
     Future<void> connectDevice(BleDeviceItem item) async {
         if (ble.isConnected && item.id == deviceId) {
             connState = ConnState.connected;
-            statusText = tr('\u5df2\u8fde\u63a5 ${item.name}', 'Connected ${item.name}');
+            _setStatus(_ScaleStatus.connected, item.name);
             notifyListeners();
             return;
         }
@@ -248,19 +323,19 @@ class ScaleController extends ChangeNotifier {
         _autoReconnect = true;
         _reconnectTimer?.cancel();
         connState = ConnState.connecting;
-        statusText = tr('\u8fde\u63a5\u4e2d ${item.name}...', 'Connecting ${item.name}...');
+        _setStatus(_ScaleStatus.connecting, item.name);
         notifyListeners();
         try {
             await ble.connect(item.device, name: item.name);
             await _saveDevice(item.id, item.name);
             _reconnectAttempt = 0;
             connState = ConnState.connected;
-            statusText = tr('\u5df2\u8fde\u63a5 ${item.name}', 'Connected ${item.name}');
+            _setStatus(_ScaleStatus.connected, item.name);
             notifyListeners();
             await syncModeToScale();
         } catch (e) {
             connState = ConnState.idle;
-            statusText = tr('\u8fde\u63a5\u5931\u8d25: $e', 'Connect failed: $e');
+            _setStatus(_ScaleStatus.connectFailed, '$e');
             notifyListeners();
         }
     }
@@ -276,7 +351,7 @@ class ScaleController extends ChangeNotifier {
 
         final adapterState = await _readAdapterState();
         if (adapterState != BluetoothAdapterState.on) {
-            statusText = tr('\u84dd\u7259\u672a\u5f00\u542f\uff0c\u7b49\u5f85\u91cd\u8fde', 'Bluetooth is off, waiting to reconnect');
+            _setStatus(_ScaleStatus.bluetoothOffWait);
             connState = ConnState.reconnecting;
             notifyListeners();
             _scheduleReconnect();
@@ -284,17 +359,17 @@ class ScaleController extends ChangeNotifier {
         }
 
         connState = ConnState.reconnecting;
-        statusText = tr('\u81ea\u52a8\u91cd\u8fde $deviceName...', 'Auto reconnecting $deviceName...');
+        _setStatus(_ScaleStatus.autoReconnecting, deviceName);
         notifyListeners();
         try {
             await ble.connectById(deviceId, name: deviceName);
             _reconnectAttempt = 0;
             connState = ConnState.connected;
-            statusText = tr('\u5df2\u8fde\u63a5 $deviceName', 'Connected $deviceName');
+            _setStatus(_ScaleStatus.connected, deviceName);
             notifyListeners();
             await syncModeToScale();
         } catch (_) {
-            statusText = tr('\u91cd\u8fde\u5931\u8d25\uff0c\u7a0d\u540e\u91cd\u8bd5', 'Reconnect failed, retry later');
+            _setStatus(_ScaleStatus.reconnectFailed);
             notifyListeners();
             _scheduleReconnect();
         }
@@ -316,12 +391,12 @@ class ScaleController extends ChangeNotifier {
     void _onBleDisconnected() {
         if (_userDisconnect || _manualSelecting) {
             connState = ConnState.idle;
-            statusText = tr('\u5df2\u65ad\u5f00', 'Disconnected');
+            _setStatus(_ScaleStatus.disconnected);
             notifyListeners();
             return;
         }
         connState = ConnState.reconnecting;
-        statusText = tr('\u8fde\u63a5\u65ad\u5f00\uff0c\u81ea\u52a8\u91cd\u8fde\u4e2d...', 'Connection lost, reconnecting...');
+        _setStatus(_ScaleStatus.connectionLost);
         notifyListeners();
         _scheduleReconnect();
     }
@@ -475,13 +550,13 @@ class ScaleController extends ChangeNotifier {
         _reconnectTimer?.cancel();
         await ble.disconnect();
         connState = ConnState.idle;
-        statusText = tr('\u5df2\u624b\u52a8\u65ad\u5f00', 'Disconnected manually');
+        _setStatus(_ScaleStatus.disconnectedManually);
         notifyListeners();
     }
 
     Future<void> _writeSafe(List<int> data) async {
         if (!ble.isConnected) {
-            statusText = tr('\u672a\u8fde\u63a5\u84dd\u7259\u79e4', 'Scale is not connected');
+            _setStatus(_ScaleStatus.scaleNotConnected);
             notifyListeners();
             return;
         }
@@ -489,7 +564,7 @@ class ScaleController extends ChangeNotifier {
             try {
                 await ble.write(data);
             } catch (e) {
-                statusText = tr('\u53d1\u9001\u5931\u8d25: $e', 'Send failed: $e');
+                _setStatus(_ScaleStatus.sendFailed, '$e');
                 notifyListeners();
             }
         });

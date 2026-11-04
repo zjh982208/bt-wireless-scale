@@ -10,11 +10,17 @@ const ktWriteUuid = '0000fff3-0000-1000-8000-00805f9b34fb';
 const writeGap = Duration(milliseconds: 4);
 
 class BleDeviceItem {
-  BleDeviceItem({required this.device, required this.name, required this.rssi});
+  BleDeviceItem({
+    required this.device,
+    required this.name,
+    required this.rssi,
+    this.markConnected = false, // 已连接设备，名称在界面上按当前语言显示
+  });
 
   final BluetoothDevice device;
   final String name;
   final int rssi;
+  final bool markConnected; // 为真时界面追加“已连接”
 
   String get id => device.remoteId.str;
 }
